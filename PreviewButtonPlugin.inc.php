@@ -16,10 +16,11 @@ class PreviewButtonPlugin extends GenericPlugin {
 	 * @copydoc GenericPlugin::register()
 	 */
 	public function register($category, $path, $mainContextId = NULL) {
-		$success = parent::register($category, $path);
-		if ($success && $this->getEnabled()) {
-			// Display the publication statement on the article details page
-			HookRegistry::register('Templates::Article::Main', [$this, 'addPublicationStatement']);
+		$success = parent::register($category, $path, $mainContextId);
+		if ($success && $this->getEnabled($mainContextId)) {
+			HookRegistry::register('LoadHandler', [$this, 'setPageHandler']);
+			HookRegistry::register('TemplateManager::setupBackendPage', [$this, 'addWorkflowPreviewButton']);
+			HookRegistry::register('ArticleHandler::view', [$this, 'permitPluginPreviewAccess']);
 		}
 		return $success;
 	}
@@ -49,114 +50,168 @@ class PreviewButtonPlugin extends GenericPlugin {
 	}
 
 	/**
-	 * Add a settings action to the plugin's entry in the
-	 * plugins list.
+	 * Route previewButton page requests to this plugin.
 	 *
-	 * @param Request $request
-	 * @param array $actionArgs
-	 * @return array
+	 * @param string $hookName
+	 * @param array $params
+	 * @return bool
 	 */
-	public function getActions($request, $actionArgs) {
+	public function setPageHandler($hookName, $params) {
+		$page =& $params[0];
+		$sourceFile =& $params[2];
 
-		// Get the existing actions
-		$actions = parent::getActions($request, $actionArgs);
-
-		// Only add the settings action when the plugin is enabled
-		if (!$this->getEnabled()) {
-			return $actions;
-		}
-
-		// Create a LinkAction that will make a request to the
-		// plugin's `manage` method with the `settings` verb.
-		$router = $request->getRouter();
-		import('lib.pkp.classes.linkAction.request.AjaxModal');
-		$linkAction = new LinkAction(
-			'settings',
-			new AjaxModal(
-				$router->url(
-					$request,
-					null,
-					null,
-					'manage',
-					null,
-					[
-						'verb' => 'settings',
-						'plugin' => $this->getName(),
-						'category' => 'generic'
-					]
-				),
-				$this->getDisplayName()
-			),
-			__('manager.plugins.settings'),
-			null
-		);
-
-		// Add the LinkAction to the existing actions.
-		// Make it the first action to be consistent with
-		// other plugins.
-		array_unshift($actions, $linkAction);
-
-		return $actions;
-	}
-
-	/**
-	 * Show and save the settings form when the settings action
-	 * is clicked.
-	 *
-	 * @param array $args
-	 * @param Request $request
-	 * @return JSONMessage
-	 */
-	public function manage($args, $request) {
-		switch ($request->getUserVar('verb')) {
-			case 'settings':
-
-				// Load the custom form
-				$this->import('PreviewButtonSettingsForm');
-				$form = new PreviewButtonSettingsForm($this);
-
-				// Fetch the form the first time it loads, before
-				// the user has tried to save it
-				if (!$request->getUserVar('save')) {
-					$form->initData();
-					return new JSONMessage(true, $form->fetch($request));
-				}
-
-				// Validate and save the form data
-				$form->readInputData();
-				if ($form->validate()) {
-					$form->execute();
-					return new JSONMessage(true);
-				}
-		}
-		return parent::manage($args, $request);
-	}
-
-	/**
-	 * Add the publication statement to the article details page.
-	 *
-	 * @param string $hookName string
-	 * @param array $params [[
-	 * 	@option array Additional parameters passed with the hook
-	 * 	@option TemplateManager
-	 * 	@option string The HTML output
-	 * ]]
-	 * @return boolean
-	 */
-	function addPublicationStatement($hookName, $params) {
-
-		// Get the publication statement for this journal or press
-		$context = Application::get()->getRequest()->getContext();
-		$publicationStatement = $this->getSetting($context->getId(), 'publicationStatement');
-
-		// Do not modify the output if there is no publication statement
-		if (!$publicationStatement) {
+		if ($page !== 'previewButton') {
 			return false;
 		}
 
-		// Add the publication statement to the output
-		$output =& $params[2];
-		$output .= '<p class="publication-statement">' . PKPString::stripUnsafeHtml($publicationStatement) . '</p>';
+		$sourceFile = $this->getPluginPath() . '/pages/previewButton/index.php';
+		return false;
+	}
+
+	/**
+	 * Make the workflow header Preview button available before editing stage.
+	 *
+	 * @param string $hookName
+	 * @param array $params
+	 * @return bool
+	 */
+	public function addWorkflowPreviewButton($hookName, $params) {
+		$request = Application::get()->getRequest();
+		if (!in_array($request->getRequestedPage(), ['workflow', 'authorDashboard'])) {
+			return false;
+		}
+
+		$context = $request->getContext();
+		if (!$context) {
+			return false;
+		}
+
+		$previewUrlPrefix = $request->getDispatcher()->url(
+			$request,
+			ROUTE_PAGE,
+			$context->getPath(),
+			'previewButton',
+			'view',
+			[]
+		);
+		$previewUrlPrefix = rtrim($previewUrlPrefix, '/') . '/';
+
+		$script = '(function() {
+	var previewUrlPrefix = ' . json_encode($previewUrlPrefix) . ';
+	var previewLabel = ' . json_encode(__('common.preview')) . ';
+	var viewLabel = ' . json_encode(__('common.view')) . ';
+
+	function addPreviewButton() {
+		if (!document.body || (
+			!document.body.classList.contains("pkp_page_workflow") &&
+			!document.body.classList.contains("pkp_page_authorDashboard")
+		)) {
+			return true;
+		}
+
+		var actions = document.querySelector(".pkpWorkflow__header .pkpHeader__actions");
+		var submissionId = document.querySelector(".pkpWorkflow__identificationId");
+		if (!actions || !submissionId) {
+			return false;
+		}
+
+		var existingAction = Array.prototype.some.call(actions.querySelectorAll("a, button"), function(action) {
+			var text = (action.textContent || "").trim();
+			return text === previewLabel || text === viewLabel;
+		});
+		if (existingAction || actions.querySelector("[data-preview-button-plugin]")) {
+			return true;
+		}
+
+		var id = (submissionId.textContent || "").trim();
+		if (!/^\\d+$/.test(id)) {
+			return true;
+		}
+
+		var previewButton = document.createElement("a");
+		previewButton.className = "pkpButton";
+		previewButton.href = previewUrlPrefix + id;
+		previewButton.textContent = previewLabel;
+		previewButton.setAttribute("data-preview-button-plugin", "true");
+		actions.insertBefore(previewButton, actions.firstChild);
+		return true;
+	}
+
+	function initPreviewButton() {
+		if (addPreviewButton()) {
+			return;
+		}
+
+		var observer = new MutationObserver(function() {
+			if (addPreviewButton()) {
+				observer.disconnect();
+			}
+		});
+		observer.observe(document.body, { childList: true, subtree: true });
+		window.setTimeout(function() {
+			observer.disconnect();
+		}, 10000);
+	}
+
+	if (document.readyState === "loading") {
+		document.addEventListener("DOMContentLoaded", initPreviewButton);
+	} else {
+		initPreviewButton();
+	}
+})();';
+
+		$templateMgr = TemplateManager::getManager($request);
+		$templateMgr->addJavaScript(
+			'previewButtonWorkflow',
+			$script,
+			[
+				'contexts' => ['backend'],
+				'inline' => true,
+				'priority' => STYLE_SEQUENCE_LATE,
+			]
+		);
+
+		return false;
+	}
+
+	/**
+	 * Let the plugin preview endpoint show galley links as accessible.
+	 *
+	 * @param string $hookName
+	 * @param array $params
+	 * @return bool
+	 */
+	public function permitPluginPreviewAccess($hookName, $params) {
+		$request =& $params[0];
+
+		if ($request->getRequestedPage() !== 'previewButton') {
+			return false;
+		}
+
+		$templateMgr = TemplateManager::getManager($request);
+		$templateMgr->assign('hasAccess', true);
+		$templateMgr->addJavaScript(
+			'previewButtonGalleys',
+			'(function() {
+	function rewriteGalleyLinks() {
+		var links = document.querySelectorAll("a.obj_galley_link, a.obj_galley_link_supplementary");
+		Array.prototype.forEach.call(links, function(link) {
+			link.href = link.href.replace("/article/view/", "/previewButton/view/");
+		});
+	}
+
+	if (document.readyState === "loading") {
+		document.addEventListener("DOMContentLoaded", rewriteGalleyLinks);
+	} else {
+		rewriteGalleyLinks();
+	}
+})();',
+			[
+				'contexts' => ['frontend'],
+				'inline' => true,
+				'priority' => STYLE_SEQUENCE_LATE,
+			]
+		);
 
 		return false;
 	}
