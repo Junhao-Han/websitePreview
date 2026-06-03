@@ -5,30 +5,30 @@
  * Copyright (c) 2003-2021 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
- * Settings form for the pluginTemplate plugin.
+ * Settings form for the Preview Button plugin.
  *}
 <script>
 	$(function() {ldelim}
-		$('#pluginTemplateSettings').pkpHandler('$.pkp.controllers.form.AjaxFormHandler');
+		$('#previewButtonSettings').pkpHandler('$.pkp.controllers.form.AjaxFormHandler');
 	{rdelim});
 </script>
 
 <form
 	class="pkp_form"
-	id="pluginTemplateSettings"
+	id="previewButtonSettings"
 	method="POST"
 	action="{url router=$smarty.const.ROUTE_COMPONENT op="manage" category="generic" plugin=$pluginName verb="settings" save=true}"
 >
 	<!-- Always add the csrf token to secure your form -->
 	{csrf}
 
-	{fbvFormArea id="templatePluginSettingsArea"}
-		{fbvFormSection label="plugins.generic.pluginTemplate.publicationStatement"}
+	{fbvFormArea id="previewButtonSettingsArea"}
+		{fbvFormSection label="plugins.generic.previewButton.publicationStatement"}
 			{fbvElement
 				type="text"
 				id="publicationStatement"
 				value=$publicationStatement
-				description="plugins.generic.pluginTemplate.publicationStatement.description"
+				description="plugins.generic.previewButton.publicationStatement.description"
 			}
 		{/fbvFormSection}
 	{/fbvFormArea}

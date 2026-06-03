@@ -11,14 +11,14 @@ msgstr ""
 "PO-Revision-Date: 2020-11-27T16:21:26+00:00\n"
 "Language: \n"
 
-msgid "plugins.generic.pluginTemplate.displayName"
-msgstr "Plugin Template"
+msgid "plugins.generic.previewButton.displayName"
+msgstr "Preview Button Plugin"
 
-msgid "plugins.generic.pluginTemplate.description"
-msgstr "A starter template for building your own plugins."
+msgid "plugins.generic.previewButton.description"
+msgstr "Adds preview controls to OJS workflow pages."
 
-msgid "plugins.generic.pluginTemplate.publicationStatement"
+msgid "plugins.generic.previewButton.publicationStatement"
 msgstr "Publication Statement"
 
-msgid "plugins.generic.pluginTemplate.publicationStatement.description"
+msgid "plugins.generic.previewButton.publicationStatement.description"
 msgstr "Add a publication statement that you would like to appear on every publication's landing page."

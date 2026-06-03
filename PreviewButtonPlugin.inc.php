@@ -1,16 +1,16 @@
 <?php
 /**
- * @file PluginTemplatePlugin.inc.php
+ * @file PreviewButtonPlugin.inc.php
  *
  * Copyright (c) 2017-2021 Simon Fraser University
  * Copyright (c) 2017-2021 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
- * @class PluginTemplatePlugin
- * @brief Plugin class for the PluginTemplate plugin.
+ * @class PreviewButtonPlugin
+ * @brief Plugin class for the Preview Button plugin.
  */
 import('lib.pkp.classes.plugins.GenericPlugin');
-class PluginTemplatePlugin extends GenericPlugin {
+class PreviewButtonPlugin extends GenericPlugin {
 
 	/**
 	 * @copydoc GenericPlugin::register()
@@ -33,7 +33,7 @@ class PluginTemplatePlugin extends GenericPlugin {
 	 * @return string
 	 */
 	public function getDisplayName() {
-		return __('plugins.generic.pluginTemplate.displayName');
+		return __('plugins.generic.previewButton.displayName');
 	}
 
 	/**
@@ -45,7 +45,7 @@ class PluginTemplatePlugin extends GenericPlugin {
 	 * @return string
 	 */
 	public function getDescription() {
-		return __('plugins.generic.pluginTemplate.description');
+		return __('plugins.generic.previewButton.description');
 	}
 
 	/**
@@ -112,8 +112,8 @@ class PluginTemplatePlugin extends GenericPlugin {
 			case 'settings':
 
 				// Load the custom form
-				$this->import('PluginTemplateSettingsForm');
-				$form = new PluginTemplateSettingsForm($this);
+				$this->import('PreviewButtonSettingsForm');
+				$form = new PreviewButtonSettingsForm($this);
 
 				// Fetch the form the first time it loads, before
 				// the user has tried to save it

@@ -1,8 +1,8 @@
 <?php
 import('lib.pkp.classes.form.Form');
-class PluginTemplateSettingsForm extends Form {
+class PreviewButtonSettingsForm extends Form {
 
-	/** @var PluginTemplatePlugin  */
+	/** @var PreviewButtonPlugin */
 	public $plugin;
 
 	/**
