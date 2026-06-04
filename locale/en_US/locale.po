@@ -16,3 +16,9 @@ msgstr "Preview Button Plugin"
 
 msgid "plugins.generic.previewButton.description"
 msgstr "Adds preview controls to OJS workflow pages."
+
+msgid "plugins.generic.previewButton.publicationStatement"
+msgstr "Publication Statement"
+
+msgid "plugins.generic.previewButton.publicationStatement.description"
+msgstr "Add a publication statement that you would like to appear on every publication's landing page."

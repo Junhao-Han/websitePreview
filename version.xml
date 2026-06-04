@@ -14,6 +14,6 @@
 	<type>plugins.generic</type>
 	<release>1.0.0.0</release>
 	<date>2019-05-15</date>
-	<lazy-load>0</lazy-load>
+	<lazy-load>1</lazy-load>
 	<class>PreviewButtonPlugin</class>
 </version>
