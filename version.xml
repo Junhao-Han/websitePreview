@@ -10,10 +10,10 @@
   * Plugin version information.
   -->
 <version>
-	<application>pluginTemplate</application>
+	<application>webProjectPreview</application>
 	<type>plugins.generic</type>
 	<release>1.0.0.0</release>
-	<date>2019-05-15</date>
-	<lazy-load>1</lazy-load>
-	<class>PluginTemplatePlugin</class>
+	<date>2026-06-04</date>
+	<lazy-load>0</lazy-load>
+	<class>WebProjectPreviewPlugin</class>
 </version>
