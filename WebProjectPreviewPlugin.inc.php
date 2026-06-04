@@ -171,7 +171,7 @@ class WebProjectPreviewPlugin extends GenericPlugin {
 	}
 
 	/**
-	 * Add a Web Project button to submission workflow pages.
+	 * Add a Website button to submission workflow pages.
 	 *
 	 * @param Request $request
 	 * @param Context $context
@@ -203,7 +203,7 @@ class WebProjectPreviewPlugin extends GenericPlugin {
 		$script = '(function() {
 	var previewUrlPrefix = ' . json_encode($previewUrlPrefix) . ';
 	var statusUrlPrefix = ' . json_encode($statusUrlPrefix) . ';
-	var buttonLabel = "Web Project";
+	var buttonLabel = "Website";
 
 	function insertWebProjectButton(actions, id) {
 		if (actions.querySelector("[data-web-project-preview-plugin]")) {

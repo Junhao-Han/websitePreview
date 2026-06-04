@@ -18,7 +18,7 @@ msgid "plugins.generic.webProjectPreview.description"
 msgstr "Preview static website ZIP submissions from OJS workflow pages."
 
 msgid "plugins.generic.webProjectPreview.viewProject"
-msgstr "Web Project"
+msgstr "Website"
 
 msgid "plugins.generic.webProjectPreview.noZip"
 msgstr "No website ZIP file was found for this submission."
