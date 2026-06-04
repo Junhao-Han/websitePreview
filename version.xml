@@ -10,10 +10,10 @@
   * Plugin version information.
   -->
 <version>
-	<application>previewButton</application>
+	<application>pluginTemplate</application>
 	<type>plugins.generic</type>
 	<release>1.0.0.0</release>
 	<date>2019-05-15</date>
 	<lazy-load>1</lazy-load>
-	<class>PreviewButtonPlugin</class>
+	<class>PluginTemplatePlugin</class>
 </version>
