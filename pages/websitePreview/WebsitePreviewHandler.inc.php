@@ -50,18 +50,19 @@ class WebsitePreviewHandler extends Handler {
 		$zipFile = $this->getZipSubmissionFile($submission, $stageId);
 
 		if (!$zipFile) {
-			$this->showMessage($request, __('plugins.generic.websitePreview.noZip'));
+			$this->showBlankPage();
 			return;
 		}
 
 		$extractDir = $this->prepareExtractedProject($request, $submission, $zipFile);
 		if (!$extractDir) {
+			$this->showBlankPage();
 			return;
 		}
 
 		$indexPath = $this->findIndexPath($extractDir);
 		if (!$indexPath) {
-			$this->showMessage($request, __('plugins.generic.websitePreview.noIndex'));
+			$this->showBlankPage();
 			return;
 		}
 
@@ -85,6 +86,18 @@ class WebsitePreviewHandler extends Handler {
 		echo '</head><body>';
 		echo '<iframe sandbox="allow-same-origin allow-scripts allow-forms allow-popups" src="' . htmlspecialchars($assetUrl, ENT_QUOTES, 'UTF-8') . '"></iframe>';
 		echo '</body></html>';
+	}
+
+	/**
+	 * Show an empty preview when no website exists for the current stage.
+	 */
+	protected function showBlankPage() {
+		header('Content-Type: text/html; charset=utf-8');
+		echo '<!doctype html><html><head><meta charset="utf-8">';
+		echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
+		echo '<title></title>';
+		echo '<style>html,body{height:100%;margin:0;background:#fff;}</style>';
+		echo '</head><body></body></html>';
 	}
 
 	/**

@@ -190,19 +190,9 @@ class WebsitePreviewPlugin extends GenericPlugin {
 			[]
 		);
 		$previewUrlPrefix = rtrim($previewUrlPrefix, '/') . '/';
-		$statusUrlPrefix = $request->getDispatcher()->url(
-			$request,
-			ROUTE_PAGE,
-			$context->getPath(),
-			'websitePreview',
-			'status',
-			[]
-		);
-		$statusUrlPrefix = rtrim($statusUrlPrefix, '/') . '/';
 
 		$script = '(function() {
 	var previewUrlPrefix = ' . json_encode($previewUrlPrefix) . ';
-	var statusUrlPrefix = ' . json_encode($statusUrlPrefix) . ';
 	var buttonLabel = "Website";
 
 	function insertWebsiteButton(actions, id, stageId) {
@@ -218,28 +208,6 @@ class WebsitePreviewPlugin extends GenericPlugin {
 		button.textContent = buttonLabel;
 		button.setAttribute("data-website-preview-plugin", "true");
 		actions.insertBefore(button, actions.firstChild);
-	}
-
-	function checkWebsiteStatus(id, stageId, callback) {
-		var request = new XMLHttpRequest();
-		request.open("GET", statusUrlPrefix + id + "/" + stageId, true);
-		request.onreadystatechange = function() {
-			if (request.readyState !== 4) {
-				return;
-			}
-
-			if (request.status < 200 || request.status >= 300) {
-				callback(false);
-				return;
-			}
-
-			try {
-				callback(!!JSON.parse(request.responseText).hasProject);
-			} catch (error) {
-				callback(false);
-			}
-		};
-		request.send();
 	}
 
 	function getCurrentStageId() {
@@ -332,14 +300,7 @@ class WebsitePreviewPlugin extends GenericPlugin {
 		}
 
 		actions.setAttribute("data-website-preview-status", statusKey);
-		checkWebsiteStatus(id, stageId, function(hasProject) {
-			if (actions.getAttribute("data-website-preview-status") !== statusKey) {
-				return;
-			}
-			if (hasProject) {
-				insertWebsiteButton(actions, id, stageId);
-			}
-		});
+		insertWebsiteButton(actions, id, stageId);
 		return true;
 	}
 

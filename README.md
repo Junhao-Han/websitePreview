@@ -50,7 +50,7 @@ Settings > Website > Plugins > Website Preview
 5. Open the submission workflow or author dashboard.
 6. Click **Website** to preview the submitted project.
 
-The **Website** button only appears when the current workflow stage includes a valid ZIP file with an `index.html` file.
+The **Website** button opens the website file for the current workflow stage. If that stage does not include a valid ZIP file with an `index.html` file, the preview opens as a blank page.
 
 ## How It Works
 
