@@ -15,30 +15,6 @@ class WebsitePreviewHandler extends Handler {
 	const MAX_UNCOMPRESSED_BYTES = 52428800; // 50 MB
 
 	/**
-	 * Report whether a submission has a viewable web project ZIP.
-	 *
-	 * @param array $args
-	 * @param Request $request
-	 */
-	public function status($args, $request) {
-		$submission = $this->getAuthorizedSubmission($request, $args);
-		$stageId = $this->getAuthorizedStageId($request, $submission, $args);
-		$zipFile = $this->getZipSubmissionFile($submission, $stageId);
-		$hasProject = false;
-
-		if ($zipFile) {
-			$extractDir = $this->prepareExtractedProject($request, $submission, $zipFile, true);
-			$hasProject = $extractDir && (bool) $this->findIndexPath($extractDir);
-		}
-
-		header('Content-Type: application/json; charset=utf-8');
-		echo json_encode([
-			'hasProject' => $hasProject,
-		]);
-		exit;
-	}
-
-	/**
 	 * Show the web project in a sandboxed iframe.
 	 *
 	 * @param array $args
@@ -330,7 +306,7 @@ class WebsitePreviewHandler extends Handler {
 	 * @param SubmissionFile $zipFile
 	 * @return string|null
 	 */
-	protected function prepareExtractedProject($request, $submission, $zipFile, $silent = false) {
+	protected function prepareExtractedProject($request, $submission, $zipFile) {
 		$extractDir = $this->getExtractDir($submission, $zipFile);
 		$markerPath = $extractDir . DIRECTORY_SEPARATOR . '.website-preview-ready';
 		if (is_file($markerPath)) {
@@ -339,43 +315,32 @@ class WebsitePreviewHandler extends Handler {
 
 		$zipPath = $this->getAbsoluteSubmissionFilePath($zipFile);
 		if (!$zipPath || !is_file($zipPath)) {
-			if ($silent) {
-				return null;
-			}
 			$request->getDispatcher()->handle404();
 		}
 
 		$this->removeDirectory($extractDir);
 		if (!mkdir($extractDir, 0775, true) && !is_dir($extractDir)) {
-			if (!$silent) {
-				$this->showMessage($request, __('plugins.generic.websitePreview.invalidZip'));
-			}
+			$this->showMessage($request, __('plugins.generic.websitePreview.invalidZip'));
 			return null;
 		}
 
 		$zip = new ZipArchive();
 		if ($zip->open($zipPath) !== true) {
-			if (!$silent) {
-				$this->showMessage($request, __('plugins.generic.websitePreview.invalidZip'));
-			}
+			$this->showMessage($request, __('plugins.generic.websitePreview.invalidZip'));
 			return null;
 		}
 
 		if (!$this->validateZip($zip)) {
 			$zip->close();
 			$this->removeDirectory($extractDir);
-			if (!$silent) {
-				$this->showMessage($request, __('plugins.generic.websitePreview.unsafeZip'));
-			}
+			$this->showMessage($request, __('plugins.generic.websitePreview.unsafeZip'));
 			return null;
 		}
 
 		if (!$this->extractZip($zip, $extractDir)) {
 			$zip->close();
 			$this->removeDirectory($extractDir);
-			if (!$silent) {
-				$this->showMessage($request, __('plugins.generic.websitePreview.unsafeZip'));
-			}
+			$this->showMessage($request, __('plugins.generic.websitePreview.unsafeZip'));
 			return null;
 		}
 

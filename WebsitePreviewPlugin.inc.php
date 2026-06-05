@@ -191,153 +191,24 @@ class WebsitePreviewPlugin extends GenericPlugin {
 		);
 		$previewUrlPrefix = rtrim($previewUrlPrefix, '/') . '/';
 
-		$script = '(function() {
-	var previewUrlPrefix = ' . json_encode($previewUrlPrefix) . ';
-	var buttonLabel = "Website";
-
-	function insertWebsiteButton(actions, id, stageId) {
-		if (actions.querySelector("[data-website-preview-plugin]")) {
-			return;
-		}
-
-		var button = document.createElement("a");
-		button.className = "pkpButton";
-		button.href = previewUrlPrefix + id + "/" + stageId;
-		button.target = "_blank";
-		button.rel = "noopener noreferrer";
-		button.textContent = buttonLabel;
-		button.setAttribute("data-website-preview-plugin", "true");
-		actions.insertBefore(button, actions.firstChild);
-	}
-
-	function getCurrentStageId() {
-		var activeSelectors = [
-			"#stageTabs > ul > li.ui-tabs-active",
-			"#stageTabs > ul > li.ui-state-active",
-			"#stageTabs > ul > li[aria-selected=true]",
-			"#stageTabs > ul > li.ui-tabs-active a",
-			"#stageTabs > ul > li.ui-state-active a",
-			"#stageTabs > ul > li[aria-selected=true] a"
-		];
-		for (var i = 0; i < activeSelectors.length; i++) {
-			var activeStage = document.querySelector(activeSelectors[i]);
-			var stageId = getStageIdFromElement(activeStage);
-			if (stageId) {
-				return stageId;
-			}
-		}
-
-		var workflowMatch = window.location.pathname.match(/\/workflow\/index\/\d+\/(\d+)/);
-		if (workflowMatch) {
-			return workflowMatch[1];
-		}
-
-		return null;
-	}
-
-	function getStageIdFromElement(element) {
-		if (!element) {
-			return null;
-		}
-
-		var stageClass = (element.className || "").toString().match(/stageId(\d+)/);
-		if (stageClass) {
-			return stageClass[1];
-		}
-
-		var link = element.matches && element.matches("a") ? element : element.querySelector && element.querySelector("a");
-		if (!link) {
-			return null;
-		}
-
-		var href = link.getAttribute("href") || "";
-		var stageQuery = href.match(/[?&]stageId=(\d+)/);
-		if (stageQuery) {
-			return stageQuery[1];
-		}
-
-		var linkClass = (link.className || "").toString().match(/stageId(\d+)/);
-		return linkClass ? linkClass[1] : null;
-	}
-
-	function addWebsiteButton() {
-		if (!document.body || (
-			!document.body.classList.contains("pkp_page_workflow") &&
-			!document.body.classList.contains("pkp_page_authorDashboard")
-		)) {
-			return true;
-		}
-
-		var actions = document.querySelector(".pkpWorkflow__header .pkpHeader__actions");
-		var submissionId = document.querySelector(".pkpWorkflow__identificationId");
-		if (!actions || !submissionId) {
-			return false;
-		}
-
-		var stageId = getCurrentStageId();
-		if (!stageId) {
-			var existingButton = actions.querySelector("[data-website-preview-plugin]");
-			if (existingButton) {
-				existingButton.parentNode.removeChild(existingButton);
-			}
-			actions.removeAttribute("data-website-preview-status");
-			return false;
-		}
-
-		var id = (submissionId.textContent || "").trim();
-		if (!/^\\d+$/.test(id)) {
-			return true;
-		}
-
-		var statusKey = id + ":" + stageId;
-		if (actions.getAttribute("data-website-preview-status") === statusKey) {
-			return true;
-		}
-
-		var button = actions.querySelector("[data-website-preview-plugin]");
-		if (button) {
-			button.parentNode.removeChild(button);
-		}
-
-		actions.setAttribute("data-website-preview-status", statusKey);
-		insertWebsiteButton(actions, id, stageId);
-		return true;
-	}
-
-	function initWebsiteButton() {
-		var updateTimer;
-		function scheduleWebsiteButtonUpdate() {
-			window.clearTimeout(updateTimer);
-			updateTimer = window.setTimeout(addWebsiteButton, 50);
-		}
-
-		addWebsiteButton();
-
-		var observer = new MutationObserver(function() {
-			scheduleWebsiteButtonUpdate();
-		});
-		observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "aria-selected"] });
-		document.addEventListener("click", function(event) {
-			if (event.target.closest && event.target.closest("#stageTabs a")) {
-				scheduleWebsiteButtonUpdate();
-			}
-		}, true);
-	}
-
-	if (document.readyState === "loading") {
-		document.addEventListener("DOMContentLoaded", initWebsiteButton);
-	} else {
-		initWebsiteButton();
-	}
-})();';
-
 		$templateMgr = TemplateManager::getManager($request);
 		$templateMgr->addJavaScript(
-			'websitePreviewWorkflow',
-			$script,
+			'websitePreviewWorkflowConfig',
+			'window.websitePreviewWorkflowConfig = ' . json_encode([
+				'previewUrlPrefix' => $previewUrlPrefix,
+				'buttonLabel' => __('plugins.generic.websitePreview.viewProject'),
+			]) . ';',
 			[
 				'contexts' => ['backend'],
 				'inline' => true,
+				'priority' => STYLE_SEQUENCE_LATE,
+			]
+		);
+		$templateMgr->addJavaScript(
+			'websitePreviewWorkflow',
+			$this->getJavaScriptUrl($request, 'websitePreviewWorkflow.js'),
+			[
+				'contexts' => ['backend'],
 				'priority' => STYLE_SEQUENCE_LATE,
 			]
 		);
@@ -359,89 +230,37 @@ class WebsitePreviewPlugin extends GenericPlugin {
 			return;
 		}
 
-		$script = '(function() {
-	var genreId = ' . json_encode((int) $genre->getId()) . ';
-	var genreName = ' . json_encode(self::WEB_PROJECT_GENRE_NAME) . ';
-
-	function isSubmissionWizard() {
-		return window.location.href.indexOf("/submission/wizard/") !== -1;
-	}
-
-	function addWebProjectGenreOption() {
-		if (!isSubmissionWizard()) {
-			return;
-		}
-
-		var modal = Array.prototype.filter.call(document.querySelectorAll(".modal, [role=dialog]"), function(element) {
-			return (element.textContent || "").indexOf("What kind of file is this?") !== -1;
-		})[0];
-		if (!modal || (modal.textContent || "").indexOf(genreName) !== -1) {
-			return;
-		}
-
-		var options = modal.querySelector("fieldset") || modal.querySelector(".modal__content") || modal;
-		var otherInput = Array.prototype.filter.call(options.querySelectorAll("input[type=radio]"), function(input) {
-			var label = input.closest("label");
-			return label && (label.textContent || "").trim() === "Other";
-		})[0];
-		var referenceLabel = otherInput ? otherInput.closest("label") : null;
-		if (!referenceLabel) {
-			return;
-		}
-
-		var label = referenceLabel.cloneNode(true);
-		var input = label.querySelector("input[type=radio]");
-		if (!input) {
-			return;
-		}
-		input.value = String(genreId);
-		input.checked = false;
-		input.removeAttribute("checked");
-		input.id = "genreId-web-project";
-
-		Array.prototype.forEach.call(label.childNodes, function(node) {
-			if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
-				node.textContent = " " + genreName;
-			}
-		});
-		if ((label.textContent || "").indexOf(genreName) === -1) {
-			label.appendChild(document.createTextNode(" " + genreName));
-		}
-
-		referenceLabel.parentNode.insertBefore(label, referenceLabel);
-	}
-
-	function initSubmissionWizardSupport() {
-		addWebProjectGenreOption();
-		var observer = new MutationObserver(function() {
-			addWebProjectGenreOption();
-		});
-		observer.observe(document.body, { childList: true, subtree: true });
-	}
-
-	if (document.readyState === "loading") {
-		document.addEventListener("DOMContentLoaded", initSubmissionWizardSupport);
-	} else {
-		initSubmissionWizardSupport();
-	}
-})();';
-
 		$templateMgr = TemplateManager::getManager($request);
 		$templateMgr->addJavaScript(
-			'websitePreviewSubmissionWizard',
-			$script,
+			'websitePreviewSubmissionWizardConfig',
+			'window.websitePreviewSubmissionWizardConfig = ' . json_encode([
+				'genreId' => (int) $genre->getId(),
+				'genreName' => self::WEB_PROJECT_GENRE_NAME,
+			]) . ';',
 			[
 				'contexts' => ['backend'],
 				'inline' => true,
 				'priority' => STYLE_SEQUENCE_LATE,
 			]
 		);
+		$templateMgr->addJavaScript(
+			'websitePreviewSubmissionWizard',
+			$this->getJavaScriptUrl($request, 'websitePreviewSubmissionWizard.js'),
+			[
+				'contexts' => ['backend'],
+				'priority' => STYLE_SEQUENCE_LATE,
+			]
+		);
 	}
 
 	/**
-	 * @deprecated Use addBackendScripts().
+	 * Get a public URL for one of this plugin's JavaScript assets.
+	 *
+	 * @param Request $request
+	 * @param string $fileName
+	 * @return string
 	 */
-	public function addWorkflowButton($hookName, $params) {
-		return false;
+	protected function getJavaScriptUrl($request, $fileName) {
+		return rtrim($request->getBaseUrl(), '/') . '/' . $this->getPluginPath() . '/js/' . $fileName;
 	}
 }

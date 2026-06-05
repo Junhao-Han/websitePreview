@@ -20,12 +20,6 @@ msgstr "Preview static website ZIP submissions from OJS workflow pages."
 msgid "plugins.generic.websitePreview.viewProject"
 msgstr "Website"
 
-msgid "plugins.generic.websitePreview.noZip"
-msgstr "No website ZIP file was found for this workflow stage."
-
-msgid "plugins.generic.websitePreview.noIndex"
-msgstr "The website ZIP file does not contain an index.html file."
-
 msgid "plugins.generic.websitePreview.invalidZip"
 msgstr "The website ZIP file could not be opened."
 

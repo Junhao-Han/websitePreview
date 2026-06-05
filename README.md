@@ -7,6 +7,7 @@ The plugin is designed for submissions where the scholarly work includes a small
 ## Features
 
 - Adds a **Web Project** file kind to the submission file type list.
+- Adds a web project requirement to the journal's submission checklist.
 - Detects ZIP files that contain an `index.html` entry point.
 - Adds a **Website** button to eligible submission workflow pages.
 - Opens the submitted website in a sandboxed preview page.
@@ -41,6 +42,11 @@ Enable the plugin in OJS:
 Settings > Website > Plugins > Website Preview
 ```
 
+When enabled, the plugin automatically adds:
+
+- A **Web Project** file kind for uploaded submission files.
+- A submission checklist requirement telling authors to upload web projects as ZIP files with an `index.html` entry point.
+
 ## Usage
 
 1. Start a new submission.
@@ -56,7 +62,6 @@ The **Website** button opens the website file for the current workflow stage. If
 
 The plugin adds its own OJS routes:
 
-- `websitePreview/status/{submissionId}/{stageId}` checks whether the current workflow stage has a viewable website ZIP.
 - `websitePreview/view/{submissionId}/{stageId}` opens the preview page.
 - `websitePreview/asset/{submissionId}/{submissionFileId}/{path}` serves files from the extracted ZIP.
 

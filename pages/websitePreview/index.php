@@ -7,7 +7,6 @@
  */
 
 switch ($op) {
-	case 'status':
 	case 'view':
 	case 'asset':
 		define('HANDLER_CLASS', 'WebsitePreviewHandler');
