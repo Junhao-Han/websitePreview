@@ -9,7 +9,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "POT-Creation-Date: 2026-06-04T00:00:00+00:00\n"
 "PO-Revision-Date: 2026-06-04T00:00:00+00:00\n"
-"Language: \n"
+"Language: en_US\n"
 
 msgid "plugins.generic.websitePreview.displayName"
 msgstr "Website Preview"
@@ -20,8 +20,26 @@ msgstr "Preview static website ZIP submissions from OJS workflow pages."
 msgid "plugins.generic.websitePreview.viewProject"
 msgstr "Website"
 
+msgid "plugins.generic.websitePreview.previewFrameTitle"
+msgstr "Website preview"
+
+msgid "plugins.generic.websitePreview.previewUnavailable"
+msgstr "Website preview unavailable"
+
+msgid "plugins.generic.websitePreview.noWebProjectZip"
+msgstr "No authorized Web Project ZIP file was found for the current workflow stage."
+
 msgid "plugins.generic.websitePreview.invalidZip"
 msgstr "The website ZIP file could not be opened."
 
 msgid "plugins.generic.websitePreview.unsafeZip"
 msgstr "The website ZIP file contains unsafe paths or unsupported files."
+
+msgid "plugins.generic.websitePreview.extractFailed"
+msgstr "The website ZIP file could not be extracted."
+
+msgid "plugins.generic.websitePreview.noIndexHtml"
+msgstr "The website ZIP file does not contain an index.html entry point."
+
+msgid "plugins.generic.websitePreview.multipleIndexHtml"
+msgstr "The website ZIP file contains multiple index.html files. Add an index.html file at the ZIP root, or keep only one index.html file in the project."

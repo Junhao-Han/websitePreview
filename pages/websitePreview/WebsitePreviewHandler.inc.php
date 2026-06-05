@@ -8,11 +8,20 @@
  */
 
 import('classes.handler.Handler');
+import('lib.pkp.classes.file.FileManager');
+import('lib.pkp.classes.security.authorization.SubmissionFileAccessPolicy');
 import('lib.pkp.classes.submission.SubmissionFile');
 
 class WebsitePreviewHandler extends Handler {
+	const WEB_PROJECT_GENRE_KEY = 'WEBPROJECT';
 	const MAX_FILES = 300;
 	const MAX_UNCOMPRESSED_BYTES = 52428800; // 50 MB
+	const CACHE_VERSION = 2;
+	const MARKER_FILE = '.website-preview-ready.json';
+	const PREVIEW_PAGE_CSP = "default-src 'none'; frame-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'self'";
+	// Many static website ZIPs rely on CDN-hosted scripts, images, fonts, or media.
+	// Same-origin is allowed for compatibility; forms, objects, and XHR/WebSocket calls stay blocked by CSP.
+	const ASSET_CSP = "default-src 'self' data: blob: http: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: http: https:; style-src 'self' 'unsafe-inline' http: https:; img-src 'self' data: blob: http: https:; font-src 'self' data: http: https:; media-src 'self' data: blob: http: https:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
 
 	/**
 	 * Show the web project in a sandboxed iframe.
@@ -23,22 +32,32 @@ class WebsitePreviewHandler extends Handler {
 	public function view($args, $request) {
 		$submission = $this->getAuthorizedSubmission($request, $args);
 		$stageId = $this->getAuthorizedStageId($request, $submission, $args);
-		$zipFile = $this->getZipSubmissionFile($submission, $stageId);
+		$zipFile = $this->getZipSubmissionFile($request, $submission, $stageId);
 
 		if (!$zipFile) {
-			$this->showBlankPage();
+			$this->showPreviewError(__('plugins.generic.websitePreview.noWebProjectZip'));
 			return;
 		}
 
 		$extractDir = $this->prepareExtractedProject($request, $submission, $zipFile);
 		if (!$extractDir) {
-			$this->showBlankPage();
 			return;
 		}
 
-		$indexPath = $this->findIndexPath($extractDir);
+		$indexError = null;
+		$indexCandidates = [];
+		$indexPath = $this->findIndexPath($extractDir, $indexError, $indexCandidates);
 		if (!$indexPath) {
-			$this->showBlankPage();
+			if ($indexError === 'multiple') {
+				$this->showPreviewError(
+					__('plugins.generic.websitePreview.multipleIndexHtml'),
+					200,
+					$indexCandidates
+				);
+				return;
+			}
+
+			$this->showPreviewError(__('plugins.generic.websitePreview.noIndexHtml'));
 			return;
 		}
 
@@ -50,30 +69,19 @@ class WebsitePreviewHandler extends Handler {
 			'asset',
 			array_merge([
 				$submission->getId(),
+				$stageId,
 				$zipFile->getId(),
 			], explode('/', $indexPath))
 		);
 
-		header('Content-Type: text/html; charset=utf-8');
+		$this->sendHtmlHeaders(200, self::PREVIEW_PAGE_CSP);
 		echo '<!doctype html><html><head><meta charset="utf-8">';
 		echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
 		echo '<title>' . htmlspecialchars($submission->getLocalizedTitle(), ENT_QUOTES, 'UTF-8') . '</title>';
 		echo '<style>html,body{height:100%;margin:0;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f4f4;}iframe{width:100%;height:100%;border:0;background:#fff;}</style>';
 		echo '</head><body>';
-		echo '<iframe sandbox="allow-same-origin allow-scripts allow-forms allow-popups" src="' . htmlspecialchars($assetUrl, ENT_QUOTES, 'UTF-8') . '"></iframe>';
+		echo '<iframe title="' . htmlspecialchars(__('plugins.generic.websitePreview.previewFrameTitle'), ENT_QUOTES, 'UTF-8') . '" sandbox="allow-same-origin allow-scripts allow-popups" src="' . htmlspecialchars($assetUrl, ENT_QUOTES, 'UTF-8') . '"></iframe>';
 		echo '</body></html>';
-	}
-
-	/**
-	 * Show an empty preview when no website exists for the current stage.
-	 */
-	protected function showBlankPage() {
-		header('Content-Type: text/html; charset=utf-8');
-		echo '<!doctype html><html><head><meta charset="utf-8">';
-		echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
-		echo '<title></title>';
-		echo '<style>html,body{height:100%;margin:0;background:#fff;}</style>';
-		echo '</head><body></body></html>';
 	}
 
 	/**
@@ -84,15 +92,22 @@ class WebsitePreviewHandler extends Handler {
 	 */
 	public function asset($args, $request) {
 		$submission = $this->getAuthorizedSubmission($request, $args);
-		$submissionFileId = array_shift($args);
+		$stageId = $this->getAuthorizedStageId($request, $submission, $args);
+		$submissionFileId = !empty($args) ? (int) array_shift($args) : 0;
 		$relativePath = implode('/', $args);
 
-		if (!$submissionFileId || !$relativePath) {
+		if (!$submissionFileId || !$relativePath || !$this->isAllowedStaticFile($relativePath)) {
 			$request->getDispatcher()->handle404();
 		}
 
-		$zipFile = Services::get('submissionFile')->get((int) $submissionFileId);
-		if (!$zipFile || $zipFile->getData('submissionId') != $submission->getId()) {
+		$zipFile = Services::get('submissionFile')->get($submissionFileId);
+		if (
+			!$zipFile ||
+			$zipFile->getData('submissionId') != $submission->getId() ||
+			!$this->isWebProjectZipFile($zipFile, $request->getContext()) ||
+			!$this->isSubmissionFileInWorkflowStage($zipFile, $stageId) ||
+			!$this->canPreviewSubmissionFile($request, $submission, $zipFile, $stageId)
+		) {
 			$request->getDispatcher()->handle404();
 		}
 
@@ -107,9 +122,7 @@ class WebsitePreviewHandler extends Handler {
 		}
 
 		$mimeType = $this->getMimeType($assetPath);
-		header('Content-Type: ' . $mimeType);
-		header('Content-Length: ' . filesize($assetPath));
-		header('Cache-Control: private');
+		$this->sendAssetHeaders($mimeType, filesize($assetPath));
 		readfile($assetPath);
 		exit;
 	}
@@ -153,6 +166,10 @@ class WebsitePreviewHandler extends Handler {
 
 		$user = $request->getUser();
 		$context = $request->getContext();
+		if (!$user || !$context) {
+			$request->getDispatcher()->handle404();
+		}
+
 		$accessibleWorkflowStages = Services::get('user')->getAccessibleWorkflowStages(
 			$user->getId(),
 			$context->getId(),
@@ -164,16 +181,8 @@ class WebsitePreviewHandler extends Handler {
 			return $stageId;
 		}
 
-		$reviewAssignmentDao = DAORegistry::getDAO('ReviewAssignmentDAO'); /* @var $reviewAssignmentDao ReviewAssignmentDAO */
-		$reviewAssignments = $reviewAssignmentDao->getBySubmissionReviewer($submission->getId(), $user->getId());
-		while ($reviewAssignment = $reviewAssignments->next()) {
-			if (
-				(int) $reviewAssignment->getStageId() === $stageId &&
-				!$reviewAssignment->getDeclined() &&
-				!$reviewAssignment->getCancelled()
-			) {
-				return $stageId;
-			}
+		foreach ($this->getActiveReviewAssignments($submission, $user, $stageId) as $reviewAssignment) {
+			return $stageId;
 		}
 
 		$request->getDispatcher()->handle404();
@@ -203,15 +212,33 @@ class WebsitePreviewHandler extends Handler {
 			return true;
 		}
 
+		return !empty($this->getActiveReviewAssignments($submission, $user));
+	}
+
+	/**
+	 * Get active review assignments for a user.
+	 *
+	 * @param Submission $submission
+	 * @param User $user
+	 * @param int|null $stageId
+	 * @return array
+	 */
+	protected function getActiveReviewAssignments($submission, $user, $stageId = null) {
 		$reviewAssignmentDao = DAORegistry::getDAO('ReviewAssignmentDAO'); /* @var $reviewAssignmentDao ReviewAssignmentDAO */
-		$reviewAssignments = $reviewAssignmentDao->getBySubmissionReviewer($submission->getId(), $user->getId());
-		while ($reviewAssignment = $reviewAssignments->next()) {
+		$reviewAssignments = $reviewAssignmentDao->getBySubmissionReviewer(
+			$submission->getId(),
+			$user->getId(),
+			$stageId
+		);
+		$activeReviewAssignments = [];
+
+		foreach ($reviewAssignments as $reviewAssignment) {
 			if (!$reviewAssignment->getDeclined() && !$reviewAssignment->getCancelled()) {
-				return true;
+				$activeReviewAssignments[] = $reviewAssignment;
 			}
 		}
 
-		return false;
+		return $activeReviewAssignments;
 	}
 
 	/**
@@ -245,15 +272,17 @@ class WebsitePreviewHandler extends Handler {
 	}
 
 	/**
-	 * Find the most recent ZIP submission file for a workflow stage.
+	 * Find the most recent authorized Web Project ZIP submission file for a workflow stage.
 	 *
+	 * @param Request $request
 	 * @param Submission $submission
 	 * @param int $stageId
 	 * @return SubmissionFile|null
 	 */
-	protected function getZipSubmissionFile($submission, $stageId) {
+	protected function getZipSubmissionFile($request, $submission, $stageId) {
 		$fileStages = $this->getFileStagesForWorkflowStage($stageId);
-		if (!$fileStages) {
+		$genre = $this->getWebProjectGenre($request->getContext());
+		if (!$fileStages || !$genre) {
 			return null;
 		}
 
@@ -261,18 +290,198 @@ class WebsitePreviewHandler extends Handler {
 		$submissionFiles = Services::get('submissionFile')->getMany([
 			'submissionIds' => [$submission->getId()],
 			'fileStages' => $fileStages,
+			'genreIds' => [$genre->getId()],
 		]);
 
 		foreach ($submissionFiles as $submissionFile) {
-			if (Services::get('file')->getDocumentType($submissionFile->getData('mimetype')) !== DOCUMENT_TYPE_ZIP) {
+			if (
+				!$this->isWebProjectZipFile($submissionFile, $request->getContext()) ||
+				!$this->canPreviewSubmissionFile($request, $submission, $submissionFile, $stageId)
+			) {
 				continue;
 			}
-			if (!$zipFile || strtotime($submissionFile->getData('updatedAt')) > strtotime($zipFile->getData('updatedAt'))) {
+
+			if (!$zipFile || $this->isNewerSubmissionFile($submissionFile, $zipFile)) {
 				$zipFile = $submissionFile;
 			}
 		}
 
 		return $zipFile;
+	}
+
+	/**
+	 * Check whether a submission file is newer than another.
+	 *
+	 * @param SubmissionFile $candidate
+	 * @param SubmissionFile $current
+	 * @return bool
+	 */
+	protected function isNewerSubmissionFile($candidate, $current) {
+		$candidateUpdatedAt = strtotime($candidate->getData('updatedAt'));
+		$currentUpdatedAt = strtotime($current->getData('updatedAt'));
+		if ($candidateUpdatedAt === $currentUpdatedAt) {
+			return (int) $candidate->getId() > (int) $current->getId();
+		}
+		return $candidateUpdatedAt > $currentUpdatedAt;
+	}
+
+	/**
+	 * Check whether a file is a Web Project ZIP.
+	 *
+	 * @param SubmissionFile $submissionFile
+	 * @param Context $context
+	 * @return bool
+	 */
+	protected function isWebProjectZipFile($submissionFile, $context) {
+		if (Services::get('file')->getDocumentType($submissionFile->getData('mimetype')) !== DOCUMENT_TYPE_ZIP) {
+			return false;
+		}
+
+		$genreId = (int) $submissionFile->getData('genreId');
+		if (!$genreId) {
+			return false;
+		}
+
+		$genreDao = DAORegistry::getDAO('GenreDAO'); /* @var $genreDao GenreDAO */
+		$genre = $genreDao->getById($genreId, $context->getId());
+		return $genre && $genre->getEnabled() && $genre->getKey() === self::WEB_PROJECT_GENRE_KEY;
+	}
+
+	/**
+	 * Get the Web Project genre for the current context.
+	 *
+	 * @param Context $context
+	 * @return Genre|null
+	 */
+	protected function getWebProjectGenre($context) {
+		if (!$context) {
+			return null;
+		}
+
+		$genreDao = DAORegistry::getDAO('GenreDAO'); /* @var $genreDao GenreDAO */
+		return $genreDao->getByKey(self::WEB_PROJECT_GENRE_KEY, $context->getId());
+	}
+
+	/**
+	 * Check whether a submission file belongs to the requested workflow stage.
+	 *
+	 * @param SubmissionFile $submissionFile
+	 * @param int $stageId
+	 * @return bool
+	 */
+	protected function isSubmissionFileInWorkflowStage($submissionFile, $stageId) {
+		return in_array(
+			(int) $submissionFile->getData('fileStage'),
+			$this->getFileStagesForWorkflowStage($stageId)
+		);
+	}
+
+	/**
+	 * Check whether the current user can read a specific submission file.
+	 *
+	 * @param Request $request
+	 * @param Submission $submission
+	 * @param SubmissionFile $submissionFile
+	 * @param int $stageId
+	 * @return bool
+	 */
+	protected function canPreviewSubmissionFile($request, $submission, $submissionFile, $stageId) {
+		$user = $request->getUser();
+		$context = $request->getContext();
+		if (!$user || !$context) {
+			return false;
+		}
+
+		if (
+			$submissionFile->getData('submissionId') != $submission->getId() ||
+			!$this->isSubmissionFileInWorkflowStage($submissionFile, $stageId)
+		) {
+			return false;
+		}
+
+		$userRoleIds = $this->getUserRoleIds($user, $context);
+		if (in_array(ROLE_ID_SITE_ADMIN, $userRoleIds)) {
+			return true;
+		}
+
+		$accessibleWorkflowStages = Services::get('user')->getAccessibleWorkflowStages(
+			$user->getId(),
+			$context->getId(),
+			$submission,
+			$userRoleIds
+		);
+		$assignedFileStages = Services::get('submissionFile')->getAssignedFileStages(
+			$accessibleWorkflowStages,
+			SUBMISSION_FILE_ACCESS_READ
+		);
+		if (in_array((int) $submissionFile->getData('fileStage'), $assignedFileStages)) {
+			return true;
+		}
+
+		if ((int) $submissionFile->getData('uploaderUserId') === (int) $user->getId()) {
+			return true;
+		}
+
+		return $this->canReviewerPreviewSubmissionFile($request, $submissionFile, $stageId);
+	}
+
+	/**
+	 * Check whether a reviewer can read a review file assigned to them.
+	 *
+	 * @param Request $request
+	 * @param SubmissionFile $submissionFile
+	 * @param int $stageId
+	 * @return bool
+	 */
+	protected function canReviewerPreviewSubmissionFile($request, $submissionFile, $stageId) {
+		if (!in_array($stageId, [WORKFLOW_STAGE_ID_INTERNAL_REVIEW, WORKFLOW_STAGE_ID_EXTERNAL_REVIEW])) {
+			return false;
+		}
+
+		$user = $request->getUser();
+		$context = $request->getContext();
+		if (!$user || !$context) {
+			return false;
+		}
+
+		$reviewFileStage = $stageId == WORKFLOW_STAGE_ID_INTERNAL_REVIEW
+			? SUBMISSION_FILE_INTERNAL_REVIEW_FILE
+			: SUBMISSION_FILE_REVIEW_FILE;
+		if ((int) $submissionFile->getData('fileStage') !== $reviewFileStage) {
+			return false;
+		}
+
+		$reviewFilesDao = DAORegistry::getDAO('ReviewFilesDAO'); /* @var $reviewFilesDao ReviewFilesDAO */
+		foreach ($this->getActiveReviewAssignmentsForFile($request, $submissionFile, $stageId) as $reviewAssignment) {
+			if (
+				$context->getData('restrictReviewerFileAccess') &&
+				!$reviewAssignment->getDateConfirmed()
+			) {
+				continue;
+			}
+			if ($reviewFilesDao->check($reviewAssignment->getId(), $submissionFile->getId())) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Get active review assignments for a submission file.
+	 *
+	 * @param Request $request
+	 * @param SubmissionFile $submissionFile
+	 * @param int $stageId
+	 * @return array
+	 */
+	protected function getActiveReviewAssignmentsForFile($request, $submissionFile, $stageId) {
+		$submission = Services::get('submission')->get($submissionFile->getData('submissionId'));
+		if (!$submission) {
+			return [];
+		}
+
+		return $this->getActiveReviewAssignments($submission, $request->getUser(), $stageId);
 	}
 
 	/**
@@ -307,47 +516,106 @@ class WebsitePreviewHandler extends Handler {
 	 * @return string|null
 	 */
 	protected function prepareExtractedProject($request, $submission, $zipFile) {
-		$extractDir = $this->getExtractDir($submission, $zipFile);
-		$markerPath = $extractDir . DIRECTORY_SEPARATOR . '.website-preview-ready';
-		if (is_file($markerPath)) {
-			return $extractDir;
-		}
-
 		$zipPath = $this->getAbsoluteSubmissionFilePath($zipFile);
 		if (!$zipPath || !is_file($zipPath)) {
 			$request->getDispatcher()->handle404();
 		}
 
+		$extractDir = $this->getExtractDir($submission, $zipFile);
+		$markerPath = $extractDir . DIRECTORY_SEPARATOR . self::MARKER_FILE;
+		$fingerprint = $this->getZipFingerprint($zipFile, $zipPath);
+		if (is_file($markerPath) && $this->isExtractCacheCurrent($markerPath, $fingerprint)) {
+			return $extractDir;
+		}
+
 		$this->removeDirectory($extractDir);
 		if (!mkdir($extractDir, 0775, true) && !is_dir($extractDir)) {
-			$this->showMessage($request, __('plugins.generic.websitePreview.invalidZip'));
+			$this->showPreviewError(__('plugins.generic.websitePreview.extractFailed'));
 			return null;
 		}
 
 		$zip = new ZipArchive();
 		if ($zip->open($zipPath) !== true) {
-			$this->showMessage($request, __('plugins.generic.websitePreview.invalidZip'));
+			$this->showPreviewError(__('plugins.generic.websitePreview.invalidZip'));
 			return null;
 		}
 
 		if (!$this->validateZip($zip)) {
 			$zip->close();
 			$this->removeDirectory($extractDir);
-			$this->showMessage($request, __('plugins.generic.websitePreview.unsafeZip'));
+			$this->showPreviewError(__('plugins.generic.websitePreview.unsafeZip'));
 			return null;
 		}
 
 		if (!$this->extractZip($zip, $extractDir)) {
 			$zip->close();
 			$this->removeDirectory($extractDir);
-			$this->showMessage($request, __('plugins.generic.websitePreview.unsafeZip'));
+			$this->showPreviewError(__('plugins.generic.websitePreview.extractFailed'));
 			return null;
 		}
 
 		$zip->close();
-		file_put_contents($markerPath, date('c'));
+		$this->writeExtractMarker($markerPath, $this->getZipFingerprint($zipFile, $zipPath, true));
 
 		return $extractDir;
+	}
+
+	/**
+	 * Build a fingerprint for the uploaded ZIP.
+	 *
+	 * @param SubmissionFile $zipFile
+	 * @param string $zipPath
+	 * @param bool $includeHash
+	 * @return array
+	 */
+	protected function getZipFingerprint($zipFile, $zipPath, $includeHash = false) {
+		$fingerprint = [
+			'cacheVersion' => self::CACHE_VERSION,
+			'submissionFileId' => (int) $zipFile->getId(),
+			'fileId' => (int) $zipFile->getData('fileId'),
+			'path' => (string) $zipFile->getData('path'),
+			'updatedAt' => (string) $zipFile->getData('updatedAt'),
+			'size' => filesize($zipPath),
+			'mtime' => filemtime($zipPath),
+		];
+
+		if ($includeHash) {
+			$fingerprint['sha256'] = hash_file('sha256', $zipPath);
+		}
+
+		return $fingerprint;
+	}
+
+	/**
+	 * Check whether an extracted project still matches its ZIP.
+	 *
+	 * @param string $markerPath
+	 * @param array $fingerprint
+	 * @return bool
+	 */
+	protected function isExtractCacheCurrent($markerPath, $fingerprint) {
+		$marker = json_decode(file_get_contents($markerPath), true);
+		if (!is_array($marker)) {
+			return false;
+		}
+
+		foreach ($fingerprint as $key => $value) {
+			if (!array_key_exists($key, $marker) || $marker[$key] != $value) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Write an extraction cache marker.
+	 *
+	 * @param string $markerPath
+	 * @param array $fingerprint
+	 */
+	protected function writeExtractMarker($markerPath, $fingerprint) {
+		file_put_contents($markerPath, json_encode($fingerprint, JSON_PRETTY_PRINT));
 	}
 
 	/**
@@ -364,6 +632,10 @@ class WebsitePreviewHandler extends Handler {
 
 		for ($i = 0; $i < $zip->numFiles; $i++) {
 			$stat = $zip->statIndex($i);
+			if (!$stat || !isset($stat['name'])) {
+				return false;
+			}
+
 			$name = $stat['name'];
 			if (!$this->isSafeRelativePath($name)) {
 				return false;
@@ -393,6 +665,10 @@ class WebsitePreviewHandler extends Handler {
 	protected function extractZip($zip, $extractDir) {
 		for ($i = 0; $i < $zip->numFiles; $i++) {
 			$stat = $zip->statIndex($i);
+			if (!$stat || !isset($stat['name'])) {
+				return false;
+			}
+
 			$name = $stat['name'];
 			if (substr($name, -1) === '/') {
 				continue;
@@ -426,29 +702,61 @@ class WebsitePreviewHandler extends Handler {
 	}
 
 	/**
-	 * Find index.html in the extracted project.
+	 * Find the preview entry point in the extracted project.
+	 *
+	 * Root index.html wins. If no root index exists, exactly one nested
+	 * index.html is allowed so projects with several entry points fail clearly.
 	 *
 	 * @param string $extractDir
+	 * @param string|null $error
+	 * @param array $candidates
 	 * @return string|null
 	 */
-	protected function findIndexPath($extractDir) {
-		$rootIndex = $extractDir . DIRECTORY_SEPARATOR . 'index.html';
-		if (is_file($rootIndex)) {
-			return 'index.html';
+	protected function findIndexPath($extractDir, &$error = null, &$candidates = []) {
+		$error = null;
+		$candidates = $this->getIndexCandidates($extractDir);
+		if (empty($candidates)) {
+			$error = 'missing';
+			return null;
 		}
 
-		$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($extractDir));
+		foreach ($candidates as $candidate) {
+			if (strtolower($candidate) === 'index.html') {
+				return $candidate;
+			}
+		}
+
+		if (count($candidates) === 1) {
+			return $candidates[0];
+		}
+
+		$error = 'multiple';
+		return null;
+	}
+
+	/**
+	 * Get all index.html candidates in a deterministic order.
+	 *
+	 * @param string $extractDir
+	 * @return array
+	 */
+	protected function getIndexCandidates($extractDir) {
+		$candidates = [];
+		$iterator = new RecursiveIteratorIterator(
+			new RecursiveDirectoryIterator($extractDir, FilesystemIterator::SKIP_DOTS)
+		);
+
 		foreach ($iterator as $file) {
-			if (!$file->isFile()) {
+			if (!$file->isFile() || strtolower($file->getFilename()) !== 'index.html') {
 				continue;
 			}
-			if (strtolower($file->getFilename()) === 'index.html') {
-				$relative = substr($file->getPathname(), strlen($extractDir) + 1);
-				return str_replace(DIRECTORY_SEPARATOR, '/', $relative);
-			}
+
+			$relative = substr($file->getPathname(), strlen($extractDir) + 1);
+			$candidates[] = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
 		}
 
-		return null;
+		sort($candidates, SORT_NATURAL | SORT_FLAG_CASE);
+		return $candidates;
 	}
 
 	/**
@@ -468,7 +776,8 @@ class WebsitePreviewHandler extends Handler {
 			return null;
 		}
 
-		$target = $base . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+		$normalizedPath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath);
+		$target = $base . DIRECTORY_SEPARATOR . $normalizedPath;
 		$realTarget = realpath($target);
 		if ($realTarget && strpos($realTarget, $base . DIRECTORY_SEPARATOR) === 0) {
 			return $realTarget;
@@ -581,17 +890,57 @@ class WebsitePreviewHandler extends Handler {
 	}
 
 	/**
-	 * Send a simple HTML message.
+	 * Send a user-facing preview error page.
 	 *
-	 * @param Request $request
 	 * @param string $message
+	 * @param int $statusCode
+	 * @param array $details
 	 */
-	protected function showMessage($request, $message) {
-		header('Content-Type: text/html; charset=utf-8');
+	protected function showPreviewError($message, $statusCode = 200, $details = []) {
+		$this->sendHtmlHeaders($statusCode, self::PREVIEW_PAGE_CSP);
 		echo '<!doctype html><html><head><meta charset="utf-8">';
 		echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
-		echo '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:3rem;line-height:1.5;color:#333;}</style>';
-		echo '</head><body><p>' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</p></body></html>';
+		echo '<title>' . htmlspecialchars(__('plugins.generic.websitePreview.previewUnavailable'), ENT_QUOTES, 'UTF-8') . '</title>';
+		echo '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;background:#f6f7f8;color:#333;}main{max-width:42rem;margin:12vh auto;padding:2rem;background:#fff;border:1px solid #ddd;}h1{font-size:1.25rem;margin:0 0 1rem;}p{line-height:1.5;margin:0;}ul{margin:1rem 0 0;padding-left:1.5rem;}li{line-height:1.5;}</style>';
+		echo '</head><body><main>';
+		echo '<h1>' . htmlspecialchars(__('plugins.generic.websitePreview.previewUnavailable'), ENT_QUOTES, 'UTF-8') . '</h1>';
+		echo '<p>' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</p>';
+		if (!empty($details)) {
+			echo '<ul>';
+			foreach (array_slice($details, 0, 10) as $detail) {
+				echo '<li>' . htmlspecialchars($detail, ENT_QUOTES, 'UTF-8') . '</li>';
+			}
+			echo '</ul>';
+		}
+		echo '</main></body></html>';
+	}
+
+	/**
+	 * Send HTML page headers.
+	 *
+	 * @param int $statusCode
+	 * @param string $contentSecurityPolicy
+	 */
+	protected function sendHtmlHeaders($statusCode, $contentSecurityPolicy) {
+		http_response_code($statusCode);
+		header('Content-Type: text/html; charset=utf-8');
+		header('Cache-Control: private, no-store');
+		header('X-Content-Type-Options: nosniff');
+		header('Content-Security-Policy: ' . $contentSecurityPolicy);
+	}
+
+	/**
+	 * Send static asset headers.
+	 *
+	 * @param string $mimeType
+	 * @param int $contentLength
+	 */
+	protected function sendAssetHeaders($mimeType, $contentLength) {
+		header('Content-Type: ' . $mimeType);
+		header('Content-Length: ' . $contentLength);
+		header('Cache-Control: private, no-store');
+		header('X-Content-Type-Options: nosniff');
+		header('Content-Security-Policy: ' . self::ASSET_CSP);
 	}
 
 	/**
