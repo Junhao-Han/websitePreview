@@ -1,69 +1,56 @@
 # Website Preview Plugin for OJS
 
-Website Preview is a generic plugin for Open Journal Systems (OJS) that lets editorial users preview static website projects submitted as ZIP files.
+Website Preview is a generic plugin for Open Journal Systems (OJS) that adds a preview for static website projects submitted as ZIP files.
 
-The plugin is designed for submissions where the scholarly work includes a small static website, interactive essay, or web-based project. Authors upload the project as a ZIP file, and users with access to the submission workflow can open it from the submission page using the **Website** button.
-
-## Features
-
-- Adds a **Web Project** file kind to the submission file type list.
-- Adds a web project requirement to the journal's submission checklist.
-- Detects ZIP files that contain an `index.html` entry point.
-- Adds a **Website** button to eligible submission workflow pages.
-- Opens the submitted website in a sandboxed preview page.
-- Serves static assets from the ZIP, including HTML, CSS, JavaScript, images, fonts, audio, and video.
-- Supports projects where `index.html` is inside a folder, such as `project/index.html`.
+It was initially developed for Encounters in Theory and History of Education, a journal hosted by Queen's University Library, where web-based scholarship, interactive essays, static exhibits, and similar projects may need to be reviewed inside OJS. Authors upload the project as a **Web Project** ZIP file, and editors can open it from the workflow page with a **Website** button.
 
 ## Requirements
 
 - OJS 3.3.x
 - PHP ZIP support (`ext-zip` / `ZipArchive`)
 
-This plugin has been developed and tested against OJS 3.3.0-21.
+Developed against OJS 3.3.0-21.
 
 ## Installation
 
-Install the plugin as a generic plugin:
+Install it as a generic plugin:
 
 ```sh
 cd /path/to/ojs
 git clone https://github.com/Junhao-Han/websitePreview.git plugins/generic/websitePreview
-```
-
-Then register the plugin version:
-
-```sh
 php lib/pkp/tools/installPluginVersion.php plugins/generic/websitePreview/version.xml
 ```
 
-Enable the plugin in OJS:
+Enable it in:
 
 ```text
 Settings > Website > Plugins > Website Preview
 ```
 
-When enabled, the plugin automatically adds:
-
-- A **Web Project** file kind for uploaded submission files.
-- A submission checklist requirement telling authors to upload web projects as ZIP files with an `index.html` entry point.
-
 ## Usage
 
-1. Start a new submission.
-2. Upload the website project as a ZIP file.
-3. Make sure the ZIP file includes an `index.html` file.
-4. Choose **Web Project** as the file kind.
-5. Open the submission workflow or author dashboard.
-6. Click **Website** to preview the submitted project.
+Upload the website project as a ZIP file, choose **Web Project** as the file kind, and include an `index.html` entry point. Then open the submission workflow and click **Website**.
 
-The **Website** button opens the website file for the current workflow stage. If that stage does not include a valid ZIP file with an `index.html` file, the preview opens as a blank page.
+The preview uses the latest **Web Project** ZIP available in the current workflow stage. Other file types are ignored.
 
-## How It Works
+## Automatic Journal Changes
 
-The plugin adds its own OJS routes:
+When enabled, the plugin adds the pieces the journal needs to accept web projects:
 
-- `websitePreview/view/{submissionId}/{stageId}` opens the preview page.
-- `websitePreview/asset/{submissionId}/{submissionFileId}/{path}` serves files from the extracted ZIP.
+- A **Web Project** file type for submission files.
+- An instruction in the submission checklist asking authors to upload web projects as ZIP files with an `index.html` file.
+
+These settings are not removed automatically when the plugin is disabled.
+
+## Notes
+
+The ZIP should contain one clear `index.html` entry point. A root `index.html` is preferred. If there are multiple nested `index.html` files and no root entry point, the plugin will show an error instead of guessing which one to use.
+
+The preview is intended for static websites: HTML, CSS, JavaScript, images, fonts, audio, and video. Server-side code is not executed.
+
+Projects are shown in a sandboxed preview frame. The plugin allows common external static resources, such as CDN scripts and images, but blocks form submission, embedded objects, and background network requests from the preview.
+
+Very large ZIP files, unsafe paths, and unsupported file types are rejected.
 
 ## License
 
