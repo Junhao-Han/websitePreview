@@ -165,7 +165,6 @@ class WebsitePreviewPlugin extends GenericPlugin {
 		}
 
 		$this->addWorkflowButtonScript($request, $context);
-		$this->addSubmissionWizardScript($request, $context);
 
 		return false;
 	}
@@ -207,45 +206,6 @@ class WebsitePreviewPlugin extends GenericPlugin {
 		$templateMgr->addJavaScript(
 			'websitePreviewWorkflow',
 			$this->getJavaScriptUrl($request, 'websitePreviewWorkflow.js'),
-			[
-				'contexts' => ['backend'],
-				'priority' => STYLE_SEQUENCE_LATE,
-			]
-		);
-	}
-
-	/**
-	 * Add the Web Project file kind to the submission wizard.
-	 *
-	 * @param Request $request
-	 * @param Context $context
-	 */
-	protected function addSubmissionWizardScript($request, $context) {
-		if ($request->getRequestedPage() !== 'submission') {
-			return;
-		}
-
-		$genre = DAORegistry::getDAO('GenreDAO')->getByKey(self::WEB_PROJECT_GENRE_KEY, $context->getId());
-		if (!$genre) {
-			return;
-		}
-
-		$templateMgr = TemplateManager::getManager($request);
-		$templateMgr->addJavaScript(
-			'websitePreviewSubmissionWizardConfig',
-			'window.websitePreviewSubmissionWizardConfig = ' . json_encode([
-				'genreId' => (int) $genre->getId(),
-				'genreName' => self::WEB_PROJECT_GENRE_NAME,
-			]) . ';',
-			[
-				'contexts' => ['backend'],
-				'inline' => true,
-				'priority' => STYLE_SEQUENCE_LATE,
-			]
-		);
-		$templateMgr->addJavaScript(
-			'websitePreviewSubmissionWizard',
-			$this->getJavaScriptUrl($request, 'websitePreviewSubmissionWizard.js'),
 			[
 				'contexts' => ['backend'],
 				'priority' => STYLE_SEQUENCE_LATE,
