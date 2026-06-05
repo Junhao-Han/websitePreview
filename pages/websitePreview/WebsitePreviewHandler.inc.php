@@ -1,16 +1,16 @@
 <?php
 
 /**
- * @file pages/webProjectPreview/WebProjectPreviewHandler.inc.php
+ * @file pages/websitePreview/WebsitePreviewHandler.inc.php
  *
- * @class WebProjectPreviewHandler
+ * @class WebsitePreviewHandler
  * @brief Preview a static website ZIP uploaded as a submission file.
  */
 
 import('classes.handler.Handler');
 import('lib.pkp.classes.submission.SubmissionFile');
 
-class WebProjectPreviewHandler extends Handler {
+class WebsitePreviewHandler extends Handler {
 	const MAX_FILES = 300;
 	const MAX_UNCOMPRESSED_BYTES = 52428800; // 50 MB
 
@@ -48,7 +48,7 @@ class WebProjectPreviewHandler extends Handler {
 		$zipFile = $this->getZipSubmissionFile($submission);
 
 		if (!$zipFile) {
-			$this->showMessage($request, __('plugins.generic.webProjectPreview.noZip'));
+			$this->showMessage($request, __('plugins.generic.websitePreview.noZip'));
 			return;
 		}
 
@@ -59,7 +59,7 @@ class WebProjectPreviewHandler extends Handler {
 
 		$indexPath = $this->findIndexPath($extractDir);
 		if (!$indexPath) {
-			$this->showMessage($request, __('plugins.generic.webProjectPreview.noIndex'));
+			$this->showMessage($request, __('plugins.generic.websitePreview.noIndex'));
 			return;
 		}
 
@@ -67,7 +67,7 @@ class WebProjectPreviewHandler extends Handler {
 			$request,
 			ROUTE_PAGE,
 			$request->getContext()->getPath(),
-			'webProjectPreview',
+			'websitePreview',
 			'asset',
 			array_merge([
 				$submission->getId(),
@@ -252,7 +252,7 @@ class WebProjectPreviewHandler extends Handler {
 	 */
 	protected function prepareExtractedProject($request, $submission, $zipFile, $silent = false) {
 		$extractDir = $this->getExtractDir($submission, $zipFile);
-		$markerPath = $extractDir . DIRECTORY_SEPARATOR . '.web-project-preview-ready';
+		$markerPath = $extractDir . DIRECTORY_SEPARATOR . '.website-preview-ready';
 		if (is_file($markerPath)) {
 			return $extractDir;
 		}
@@ -268,7 +268,7 @@ class WebProjectPreviewHandler extends Handler {
 		$this->removeDirectory($extractDir);
 		if (!mkdir($extractDir, 0775, true) && !is_dir($extractDir)) {
 			if (!$silent) {
-				$this->showMessage($request, __('plugins.generic.webProjectPreview.invalidZip'));
+				$this->showMessage($request, __('plugins.generic.websitePreview.invalidZip'));
 			}
 			return null;
 		}
@@ -276,7 +276,7 @@ class WebProjectPreviewHandler extends Handler {
 		$zip = new ZipArchive();
 		if ($zip->open($zipPath) !== true) {
 			if (!$silent) {
-				$this->showMessage($request, __('plugins.generic.webProjectPreview.invalidZip'));
+				$this->showMessage($request, __('plugins.generic.websitePreview.invalidZip'));
 			}
 			return null;
 		}
@@ -285,7 +285,7 @@ class WebProjectPreviewHandler extends Handler {
 			$zip->close();
 			$this->removeDirectory($extractDir);
 			if (!$silent) {
-				$this->showMessage($request, __('plugins.generic.webProjectPreview.unsafeZip'));
+				$this->showMessage($request, __('plugins.generic.websitePreview.unsafeZip'));
 			}
 			return null;
 		}
@@ -294,7 +294,7 @@ class WebProjectPreviewHandler extends Handler {
 			$zip->close();
 			$this->removeDirectory($extractDir);
 			if (!$silent) {
-				$this->showMessage($request, __('plugins.generic.webProjectPreview.unsafeZip'));
+				$this->showMessage($request, __('plugins.generic.websitePreview.unsafeZip'));
 			}
 			return null;
 		}
@@ -506,7 +506,7 @@ class WebProjectPreviewHandler extends Handler {
 	protected function getExtractDir($submission, $zipFile) {
 		$filesDir = rtrim(Config::getVar('files', 'files_dir'), DIRECTORY_SEPARATOR);
 		return $filesDir
-			. DIRECTORY_SEPARATOR . 'webProjectPreview'
+			. DIRECTORY_SEPARATOR . 'websitePreview'
 			. DIRECTORY_SEPARATOR . (int) $submission->getId()
 			. DIRECTORY_SEPARATOR . (int) $zipFile->getId();
 	}

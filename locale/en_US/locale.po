@@ -11,23 +11,23 @@ msgstr ""
 "PO-Revision-Date: 2026-06-04T00:00:00+00:00\n"
 "Language: \n"
 
-msgid "plugins.generic.webProjectPreview.displayName"
-msgstr "Web Project Preview"
+msgid "plugins.generic.websitePreview.displayName"
+msgstr "Website Preview"
 
-msgid "plugins.generic.webProjectPreview.description"
+msgid "plugins.generic.websitePreview.description"
 msgstr "Preview static website ZIP submissions from OJS workflow pages."
 
-msgid "plugins.generic.webProjectPreview.viewProject"
+msgid "plugins.generic.websitePreview.viewProject"
 msgstr "Website"
 
-msgid "plugins.generic.webProjectPreview.noZip"
+msgid "plugins.generic.websitePreview.noZip"
 msgstr "No website ZIP file was found for this submission."
 
-msgid "plugins.generic.webProjectPreview.noIndex"
+msgid "plugins.generic.websitePreview.noIndex"
 msgstr "The website ZIP file does not contain an index.html file."
 
-msgid "plugins.generic.webProjectPreview.invalidZip"
+msgid "plugins.generic.websitePreview.invalidZip"
 msgstr "The website ZIP file could not be opened."
 
-msgid "plugins.generic.webProjectPreview.unsafeZip"
+msgid "plugins.generic.websitePreview.unsafeZip"
 msgstr "The website ZIP file contains unsafe paths or unsupported files."

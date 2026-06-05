@@ -6,8 +6,8 @@
  * Copyright (c) 2003-2021 John Willinsky
  * Distributed under the GNU GPL v3. For full terms see the file docs/COPYING.
  *
- * @brief Wrapper for the Web Project Preview plugin.
+ * @brief Wrapper for the Website Preview plugin.
  *
  */
-require_once('WebProjectPreviewPlugin.inc.php');
-return new WebProjectPreviewPlugin();
+require_once('WebsitePreviewPlugin.inc.php');
+return new WebsitePreviewPlugin();

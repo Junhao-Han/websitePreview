@@ -1,15 +1,15 @@
 <?php
 /**
- * @file WebProjectPreviewPlugin.inc.php
+ * @file WebsitePreviewPlugin.inc.php
  *
- * @class WebProjectPreviewPlugin
+ * @class WebsitePreviewPlugin
  * @brief Preview uploaded static website ZIP projects from submission workflow pages.
  */
 
 import('lib.pkp.classes.plugins.GenericPlugin');
 import('lib.pkp.classes.submission.Genre');
 
-class WebProjectPreviewPlugin extends GenericPlugin {
+class WebsitePreviewPlugin extends GenericPlugin {
 	const WEB_PROJECT_GENRE_KEY = 'WEBPROJECT';
 	const WEB_PROJECT_GENRE_NAME = 'Web Project';
 	const WEB_PROJECT_CHECKLIST = 'If the submission is a web project, upload it as a ZIP file and include an index.html file as the website entry point.';
@@ -31,14 +31,14 @@ class WebProjectPreviewPlugin extends GenericPlugin {
 	 * @copydoc Plugin::getDisplayName()
 	 */
 	public function getDisplayName() {
-		return __('plugins.generic.webProjectPreview.displayName');
+		return __('plugins.generic.websitePreview.displayName');
 	}
 
 	/**
 	 * @copydoc Plugin::getDescription()
 	 */
 	public function getDescription() {
-		return __('plugins.generic.webProjectPreview.description');
+		return __('plugins.generic.websitePreview.description');
 	}
 
 	/**
@@ -132,7 +132,7 @@ class WebProjectPreviewPlugin extends GenericPlugin {
 	}
 
 	/**
-	 * Route webProjectPreview page requests to this plugin.
+	 * Route websitePreview page requests to this plugin.
 	 *
 	 * @param string $hookName
 	 * @param array $params
@@ -142,11 +142,11 @@ class WebProjectPreviewPlugin extends GenericPlugin {
 		$page =& $params[0];
 		$sourceFile =& $params[2];
 
-		if ($page !== 'webProjectPreview') {
+		if ($page !== 'websitePreview') {
 			return false;
 		}
 
-		$sourceFile = $this->getPluginPath() . '/pages/webProjectPreview/index.php';
+		$sourceFile = $this->getPluginPath() . '/pages/websitePreview/index.php';
 		return false;
 	}
 
@@ -185,7 +185,7 @@ class WebProjectPreviewPlugin extends GenericPlugin {
 			$request,
 			ROUTE_PAGE,
 			$context->getPath(),
-			'webProjectPreview',
+			'websitePreview',
 			'view',
 			[]
 		);
@@ -194,7 +194,7 @@ class WebProjectPreviewPlugin extends GenericPlugin {
 			$request,
 			ROUTE_PAGE,
 			$context->getPath(),
-			'webProjectPreview',
+			'websitePreview',
 			'status',
 			[]
 		);
@@ -205,8 +205,8 @@ class WebProjectPreviewPlugin extends GenericPlugin {
 	var statusUrlPrefix = ' . json_encode($statusUrlPrefix) . ';
 	var buttonLabel = "Website";
 
-	function insertWebProjectButton(actions, id) {
-		if (actions.querySelector("[data-web-project-preview-plugin]")) {
+	function insertWebsiteButton(actions, id) {
+		if (actions.querySelector("[data-website-preview-plugin]")) {
 			return;
 		}
 
@@ -216,11 +216,11 @@ class WebProjectPreviewPlugin extends GenericPlugin {
 		button.target = "_blank";
 		button.rel = "noopener noreferrer";
 		button.textContent = buttonLabel;
-		button.setAttribute("data-web-project-preview-plugin", "true");
+		button.setAttribute("data-website-preview-plugin", "true");
 		actions.insertBefore(button, actions.firstChild);
 	}
 
-	function checkWebProjectStatus(id, callback) {
+	function checkWebsiteStatus(id, callback) {
 		var request = new XMLHttpRequest();
 		request.open("GET", statusUrlPrefix + id, true);
 		request.onreadystatechange = function() {
@@ -242,7 +242,7 @@ class WebProjectPreviewPlugin extends GenericPlugin {
 		request.send();
 	}
 
-	function addWebProjectButton() {
+	function addWebsiteButton() {
 		if (!document.body || (
 			!document.body.classList.contains("pkp_page_workflow") &&
 			!document.body.classList.contains("pkp_page_authorDashboard")
@@ -256,7 +256,7 @@ class WebProjectPreviewPlugin extends GenericPlugin {
 			return false;
 		}
 
-		if (actions.querySelector("[data-web-project-preview-plugin]")) {
+		if (actions.querySelector("[data-website-preview-plugin]")) {
 			return true;
 		}
 
@@ -265,26 +265,26 @@ class WebProjectPreviewPlugin extends GenericPlugin {
 			return true;
 		}
 
-		if (actions.getAttribute("data-web-project-preview-status") === id) {
+		if (actions.getAttribute("data-website-preview-status") === id) {
 			return true;
 		}
 
-		actions.setAttribute("data-web-project-preview-status", id);
-		checkWebProjectStatus(id, function(hasProject) {
+		actions.setAttribute("data-website-preview-status", id);
+		checkWebsiteStatus(id, function(hasProject) {
 			if (hasProject) {
-				insertWebProjectButton(actions, id);
+				insertWebsiteButton(actions, id);
 			}
 		});
 		return true;
 	}
 
-	function initWebProjectButton() {
-		if (addWebProjectButton()) {
+	function initWebsiteButton() {
+		if (addWebsiteButton()) {
 			return;
 		}
 
 		var observer = new MutationObserver(function() {
-			if (addWebProjectButton()) {
+			if (addWebsiteButton()) {
 				observer.disconnect();
 			}
 		});
@@ -295,15 +295,15 @@ class WebProjectPreviewPlugin extends GenericPlugin {
 	}
 
 	if (document.readyState === "loading") {
-		document.addEventListener("DOMContentLoaded", initWebProjectButton);
+		document.addEventListener("DOMContentLoaded", initWebsiteButton);
 	} else {
-		initWebProjectButton();
+		initWebsiteButton();
 	}
 })();';
 
 		$templateMgr = TemplateManager::getManager($request);
 		$templateMgr->addJavaScript(
-			'webProjectPreviewWorkflow',
+			'websitePreviewWorkflow',
 			$script,
 			[
 				'contexts' => ['backend'],
@@ -398,7 +398,7 @@ class WebProjectPreviewPlugin extends GenericPlugin {
 
 		$templateMgr = TemplateManager::getManager($request);
 		$templateMgr->addJavaScript(
-			'webProjectPreviewSubmissionWizard',
+			'websitePreviewSubmissionWizard',
 			$script,
 			[
 				'contexts' => ['backend'],
