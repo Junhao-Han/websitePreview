@@ -243,11 +243,6 @@ class WebsitePreviewPlugin extends GenericPlugin {
 	}
 
 	function getCurrentStageId() {
-		var workflowMatch = window.location.pathname.match(/\/workflow\/index\/\d+\/(\d+)/);
-		if (workflowMatch) {
-			return workflowMatch[1];
-		}
-
 		var activeSelectors = [
 			"#stageTabs > ul > li.ui-tabs-active",
 			"#stageTabs > ul > li.ui-state-active",
@@ -262,6 +257,11 @@ class WebsitePreviewPlugin extends GenericPlugin {
 			if (stageId) {
 				return stageId;
 			}
+		}
+
+		var workflowMatch = window.location.pathname.match(/\/workflow\/index\/\d+\/(\d+)/);
+		if (workflowMatch) {
+			return workflowMatch[1];
 		}
 
 		return null;
@@ -306,10 +306,6 @@ class WebsitePreviewPlugin extends GenericPlugin {
 			return false;
 		}
 
-		if (actions.querySelector("[data-website-preview-plugin]")) {
-			return true;
-		}
-
 		var stageId = getCurrentStageId();
 		if (!stageId) {
 			var existingButton = actions.querySelector("[data-website-preview-plugin]");
@@ -348,19 +344,23 @@ class WebsitePreviewPlugin extends GenericPlugin {
 	}
 
 	function initWebsiteButton() {
-		if (addWebsiteButton()) {
-			return;
+		var updateTimer;
+		function scheduleWebsiteButtonUpdate() {
+			window.clearTimeout(updateTimer);
+			updateTimer = window.setTimeout(addWebsiteButton, 50);
 		}
 
+		addWebsiteButton();
+
 		var observer = new MutationObserver(function() {
-			if (addWebsiteButton()) {
-				observer.disconnect();
-			}
+			scheduleWebsiteButtonUpdate();
 		});
 		observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "aria-selected"] });
-		window.setTimeout(function() {
-			observer.disconnect();
-		}, 10000);
+		document.addEventListener("click", function(event) {
+			if (event.target.closest && event.target.closest("#stageTabs a")) {
+				scheduleWebsiteButtonUpdate();
+			}
+		}, true);
 	}
 
 	if (document.readyState === "loading") {
