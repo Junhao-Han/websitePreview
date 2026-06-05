@@ -21,7 +21,7 @@ msgid "plugins.generic.websitePreview.viewProject"
 msgstr "Website"
 
 msgid "plugins.generic.websitePreview.noZip"
-msgstr "No website ZIP file was found for this submission."
+msgstr "No website ZIP file was found for this workflow stage."
 
 msgid "plugins.generic.websitePreview.noIndex"
 msgstr "The website ZIP file does not contain an index.html file."

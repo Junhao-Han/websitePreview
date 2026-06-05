@@ -205,14 +205,14 @@ class WebsitePreviewPlugin extends GenericPlugin {
 	var statusUrlPrefix = ' . json_encode($statusUrlPrefix) . ';
 	var buttonLabel = "Website";
 
-	function insertWebsiteButton(actions, id) {
+	function insertWebsiteButton(actions, id, stageId) {
 		if (actions.querySelector("[data-website-preview-plugin]")) {
 			return;
 		}
 
 		var button = document.createElement("a");
 		button.className = "pkpButton";
-		button.href = previewUrlPrefix + id;
+		button.href = previewUrlPrefix + id + "/" + stageId;
 		button.target = "_blank";
 		button.rel = "noopener noreferrer";
 		button.textContent = buttonLabel;
@@ -220,9 +220,9 @@ class WebsitePreviewPlugin extends GenericPlugin {
 		actions.insertBefore(button, actions.firstChild);
 	}
 
-	function checkWebsiteStatus(id, callback) {
+	function checkWebsiteStatus(id, stageId, callback) {
 		var request = new XMLHttpRequest();
-		request.open("GET", statusUrlPrefix + id, true);
+		request.open("GET", statusUrlPrefix + id + "/" + stageId, true);
 		request.onreadystatechange = function() {
 			if (request.readyState !== 4) {
 				return;
@@ -240,6 +240,56 @@ class WebsitePreviewPlugin extends GenericPlugin {
 			}
 		};
 		request.send();
+	}
+
+	function getCurrentStageId() {
+		var workflowMatch = window.location.pathname.match(/\/workflow\/index\/\d+\/(\d+)/);
+		if (workflowMatch) {
+			return workflowMatch[1];
+		}
+
+		var activeSelectors = [
+			"#stageTabs > ul > li.ui-tabs-active",
+			"#stageTabs > ul > li.ui-state-active",
+			"#stageTabs > ul > li[aria-selected=true]",
+			"#stageTabs > ul > li.ui-tabs-active a",
+			"#stageTabs > ul > li.ui-state-active a",
+			"#stageTabs > ul > li[aria-selected=true] a"
+		];
+		for (var i = 0; i < activeSelectors.length; i++) {
+			var activeStage = document.querySelector(activeSelectors[i]);
+			var stageId = getStageIdFromElement(activeStage);
+			if (stageId) {
+				return stageId;
+			}
+		}
+
+		return null;
+	}
+
+	function getStageIdFromElement(element) {
+		if (!element) {
+			return null;
+		}
+
+		var stageClass = (element.className || "").toString().match(/stageId(\d+)/);
+		if (stageClass) {
+			return stageClass[1];
+		}
+
+		var link = element.matches && element.matches("a") ? element : element.querySelector && element.querySelector("a");
+		if (!link) {
+			return null;
+		}
+
+		var href = link.getAttribute("href") || "";
+		var stageQuery = href.match(/[?&]stageId=(\d+)/);
+		if (stageQuery) {
+			return stageQuery[1];
+		}
+
+		var linkClass = (link.className || "").toString().match(/stageId(\d+)/);
+		return linkClass ? linkClass[1] : null;
 	}
 
 	function addWebsiteButton() {
@@ -260,19 +310,38 @@ class WebsitePreviewPlugin extends GenericPlugin {
 			return true;
 		}
 
+		var stageId = getCurrentStageId();
+		if (!stageId) {
+			var existingButton = actions.querySelector("[data-website-preview-plugin]");
+			if (existingButton) {
+				existingButton.parentNode.removeChild(existingButton);
+			}
+			actions.removeAttribute("data-website-preview-status");
+			return false;
+		}
+
 		var id = (submissionId.textContent || "").trim();
 		if (!/^\\d+$/.test(id)) {
 			return true;
 		}
 
-		if (actions.getAttribute("data-website-preview-status") === id) {
+		var statusKey = id + ":" + stageId;
+		if (actions.getAttribute("data-website-preview-status") === statusKey) {
 			return true;
 		}
 
-		actions.setAttribute("data-website-preview-status", id);
-		checkWebsiteStatus(id, function(hasProject) {
+		var button = actions.querySelector("[data-website-preview-plugin]");
+		if (button) {
+			button.parentNode.removeChild(button);
+		}
+
+		actions.setAttribute("data-website-preview-status", statusKey);
+		checkWebsiteStatus(id, stageId, function(hasProject) {
+			if (actions.getAttribute("data-website-preview-status") !== statusKey) {
+				return;
+			}
 			if (hasProject) {
-				insertWebsiteButton(actions, id);
+				insertWebsiteButton(actions, id, stageId);
 			}
 		});
 		return true;
@@ -288,7 +357,7 @@ class WebsitePreviewPlugin extends GenericPlugin {
 				observer.disconnect();
 			}
 		});
-		observer.observe(document.body, { childList: true, subtree: true });
+		observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "aria-selected"] });
 		window.setTimeout(function() {
 			observer.disconnect();
 		}, 10000);

@@ -22,7 +22,8 @@ class WebsitePreviewHandler extends Handler {
 	 */
 	public function status($args, $request) {
 		$submission = $this->getAuthorizedSubmission($request, $args);
-		$zipFile = $this->getZipSubmissionFile($submission);
+		$stageId = $this->getAuthorizedStageId($request, $submission, $args);
+		$zipFile = $this->getZipSubmissionFile($submission, $stageId);
 		$hasProject = false;
 
 		if ($zipFile) {
@@ -45,7 +46,8 @@ class WebsitePreviewHandler extends Handler {
 	 */
 	public function view($args, $request) {
 		$submission = $this->getAuthorizedSubmission($request, $args);
-		$zipFile = $this->getZipSubmissionFile($submission);
+		$stageId = $this->getAuthorizedStageId($request, $submission, $args);
+		$zipFile = $this->getZipSubmissionFile($submission, $stageId);
 
 		if (!$zipFile) {
 			$this->showMessage($request, __('plugins.generic.websitePreview.noZip'));
@@ -147,6 +149,48 @@ class WebsitePreviewHandler extends Handler {
 	}
 
 	/**
+	 * Get and validate the requested workflow stage id from route args.
+	 *
+	 * @param Request $request
+	 * @param Submission $submission
+	 * @param array $args
+	 * @return int
+	 */
+	protected function getAuthorizedStageId($request, $submission, &$args) {
+		$stageId = !empty($args) ? (int) array_shift($args) : 0;
+		if (!$stageId || !$this->getFileStagesForWorkflowStage($stageId)) {
+			$request->getDispatcher()->handle404();
+		}
+
+		$user = $request->getUser();
+		$context = $request->getContext();
+		$accessibleWorkflowStages = Services::get('user')->getAccessibleWorkflowStages(
+			$user->getId(),
+			$context->getId(),
+			$submission,
+			$this->getUserRoleIds($user, $context)
+		);
+
+		if (array_key_exists($stageId, $accessibleWorkflowStages)) {
+			return $stageId;
+		}
+
+		$reviewAssignmentDao = DAORegistry::getDAO('ReviewAssignmentDAO'); /* @var $reviewAssignmentDao ReviewAssignmentDAO */
+		$reviewAssignments = $reviewAssignmentDao->getBySubmissionReviewer($submission->getId(), $user->getId());
+		while ($reviewAssignment = $reviewAssignments->next()) {
+			if (
+				(int) $reviewAssignment->getStageId() === $stageId &&
+				!$reviewAssignment->getDeclined() &&
+				!$reviewAssignment->getCancelled()
+			) {
+				return $stageId;
+			}
+		}
+
+		$request->getDispatcher()->handle404();
+	}
+
+	/**
 	 * Check OJS workflow access or assigned reviewer access.
 	 *
 	 * @param Request $request
@@ -212,22 +256,22 @@ class WebsitePreviewHandler extends Handler {
 	}
 
 	/**
-	 * Find the most recent ZIP submission file.
+	 * Find the most recent ZIP submission file for a workflow stage.
 	 *
 	 * @param Submission $submission
+	 * @param int $stageId
 	 * @return SubmissionFile|null
 	 */
-	protected function getZipSubmissionFile($submission) {
+	protected function getZipSubmissionFile($submission, $stageId) {
+		$fileStages = $this->getFileStagesForWorkflowStage($stageId);
+		if (!$fileStages) {
+			return null;
+		}
+
 		$zipFile = null;
 		$submissionFiles = Services::get('submissionFile')->getMany([
 			'submissionIds' => [$submission->getId()],
-			'fileStages' => [
-				SUBMISSION_FILE_SUBMISSION,
-				SUBMISSION_FILE_REVIEW_FILE,
-				SUBMISSION_FILE_REVIEW_REVISION,
-				SUBMISSION_FILE_INTERNAL_REVIEW_FILE,
-				SUBMISSION_FILE_INTERNAL_REVIEW_REVISION,
-			],
+			'fileStages' => $fileStages,
 		]);
 
 		foreach ($submissionFiles as $submissionFile) {
@@ -240,6 +284,29 @@ class WebsitePreviewHandler extends Handler {
 		}
 
 		return $zipFile;
+	}
+
+	/**
+	 * Get submission file stages that belong to a workflow stage.
+	 *
+	 * @param int $stageId
+	 * @return array
+	 */
+	protected function getFileStagesForWorkflowStage($stageId) {
+		switch ($stageId) {
+			case WORKFLOW_STAGE_ID_SUBMISSION:
+				return [SUBMISSION_FILE_SUBMISSION];
+			case WORKFLOW_STAGE_ID_INTERNAL_REVIEW:
+				return [SUBMISSION_FILE_INTERNAL_REVIEW_FILE, SUBMISSION_FILE_INTERNAL_REVIEW_REVISION];
+			case WORKFLOW_STAGE_ID_EXTERNAL_REVIEW:
+				return [SUBMISSION_FILE_REVIEW_FILE, SUBMISSION_FILE_REVIEW_REVISION];
+			case WORKFLOW_STAGE_ID_EDITING:
+				return [SUBMISSION_FILE_FINAL, SUBMISSION_FILE_COPYEDIT];
+			case WORKFLOW_STAGE_ID_PRODUCTION:
+				return [SUBMISSION_FILE_PRODUCTION_READY];
+			default:
+				return [];
+		}
 	}
 
 	/**
