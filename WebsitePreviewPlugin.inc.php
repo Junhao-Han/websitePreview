@@ -73,6 +73,7 @@ class WebsitePreviewPlugin extends GenericPlugin {
 				$genre->setEnabled(true);
 				$genreDao->updateObject($genre);
 			}
+			$this->positionWebProjectGenre($genreDao, $context->getId());
 			return $genre;
 		}
 
@@ -92,7 +93,49 @@ class WebsitePreviewPlugin extends GenericPlugin {
 		$genre->setEnabled(true);
 		$genre->setName(self::WEB_PROJECT_GENRE_NAME, $context->getPrimaryLocale());
 		$genreDao->insertObject($genre);
+		$this->positionWebProjectGenre($genreDao, $context->getId());
 		return $genre;
+	}
+
+	/**
+	 * Keep Web Project near the end, but before the generic Other option.
+	 *
+	 * @param GenreDAO $genreDao
+	 * @param int $contextId
+	 */
+	protected function positionWebProjectGenre($genreDao, $contextId) {
+		$orderedGenres = [];
+		$webProjectGenre = null;
+		$genres = $genreDao->getByContextId($contextId);
+		while ($genre = $genres->next()) {
+			if ($genre->getKey() === self::WEB_PROJECT_GENRE_KEY) {
+				$webProjectGenre = $genre;
+				continue;
+			}
+			$orderedGenres[] = $genre;
+		}
+
+		if (!$webProjectGenre) {
+			return;
+		}
+
+		$targetIndex = count($orderedGenres);
+		foreach ($orderedGenres as $index => $genre) {
+			if ($genre->getKey() === 'OTHER') {
+				$targetIndex = $index;
+				break;
+			}
+		}
+
+		array_splice($orderedGenres, $targetIndex, 0, [$webProjectGenre]);
+
+		foreach ($orderedGenres as $sequence => $genre) {
+			if ((float) $genre->getSequence() === (float) $sequence) {
+				continue;
+			}
+			$genre->setSequence($sequence);
+			$genreDao->updateObject($genre);
+		}
 	}
 
 	/**
